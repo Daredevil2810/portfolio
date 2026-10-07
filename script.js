@@ -1,209 +1,91 @@
-// Mobile Menu Toggle
+const P = window.PROJECTS || [];
+const chips = a => `<ul class="chips">${a.map(t => `<li>${t}</li>`).join("")}</ul>`;
+const typeLabel = t => (t === "android" ? "Android app" : "Web app");
 
-const menuBtn = document.querySelector(".menu-btn");
-const navLinks = document.querySelector(".nav-links");
-
+/* Mobile menu */
+const menuBtn = document.querySelector(".menu-btn"), menu = document.getElementById("menu");
 menuBtn.addEventListener("click", () => {
-
-    if(navLinks.style.display === "flex"){
-        navLinks.style.display = "none";
-    }else{
-        navLinks.style.display = "flex";
-    }
-
+  const open = menu.classList.toggle("open");
+  menuBtn.setAttribute("aria-expanded", open);
 });
+menu.addEventListener("click", e => { if (e.target.tagName === "A") { menu.classList.remove("open"); menuBtn.setAttribute("aria-expanded", false); } });
 
+/* Home page: project cards + filter */
+const grid = document.getElementById("project-grid");
+if (grid) {
+  const draw = f => {
+    grid.innerHTML = P.filter(p => f === "all" || p.type === f).map(p => `
+      <article class="card">
+        <div class="card-top"><span>${typeLabel(p.type)}</span><span class="status">${p.status}</span></div>
+        <h3>${p.title}</h3>
+        <p>${p.tagline}</p>
+        ${chips(p.stack.slice(0, 4))}
+        <div class="card-actions">
+          <a class="btn primary" href="project.html?p=${p.slug}">View details</a>
+          <a class="btn" href="${p.links[0].url}" target="_blank" rel="noopener">${p.type === "android" && p.status === "Google Play" ? "Google Play" : p.status === "Open source" ? "Source code" : "Live site"}</a>
+        </div>
+      </article>`).join("");
+  };
+  draw("all");
+  document.querySelectorAll(".filters button").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(".filters button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    draw(b.dataset.filter);
+  }));
 
-// Close menu when link clicked (mobile)
+  /* Highlight current section in nav */
+  const links = [...menu.querySelectorAll("a")];
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) links.forEach(l => l.classList.toggle("active", l.getAttribute("href") === "#" + e.target.id));
+  }), { rootMargin: "-40% 0px -55% 0px" });
+  document.querySelectorAll("main section[id]").forEach(s => io.observe(s));
 
-document.querySelectorAll(".nav-links a").forEach(link => {
-
-    link.addEventListener("click", () => {
-
-        if(window.innerWidth < 768){
-            navLinks.style.display = "none";
-        }
-
-    });
-
-});
-
-
-// Fade In Animation on Scroll
-
-const sections = document.querySelectorAll("section");
-
-function revealSections() {
-    const triggerBottom = window.innerHeight * 0.85;
-
-    sections.forEach(section => {
-        const sectionTop = section.getBoundingClientRect().top;
-
-        if (sectionTop < triggerBottom) {
-            section.classList.add("show");
-        }
-    });
+  /* Contact form (Formspree) */
+  const form = document.getElementById("contact-form"), btn = document.getElementById("send-btn"), st = document.getElementById("form-status");
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    btn.disabled = true; btn.textContent = "Sending..."; st.className = ""; st.textContent = "";
+    try {
+      const r = await fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } });
+      if (r.ok) { st.textContent = "Message sent. I'll reply soon."; st.className = "ok"; form.reset(); }
+      else { st.textContent = "Message not sent. Please try again or email me directly."; st.className = "err"; }
+    } catch { st.textContent = "Network error. Check your connection and try again."; st.className = "err"; }
+    btn.disabled = false; btn.textContent = "Send message";
+  });
 }
 
-// Run once when the page loads
-revealSections();
-
-// Run whenever the user scrolls
-window.addEventListener("scroll", revealSections);
-
-
-// Active Navbar Link Highlight
-
-const navItems = document.querySelectorAll(".nav-links a");
-
-window.addEventListener("scroll", () => {
-
-    let current = "";
-
-    sections.forEach(section => {
-
-        const sectionTop = section.offsetTop - 100;
-        const sectionHeight = section.clientHeight;
-
-        if(pageYOffset >= sectionTop){
-            current = section.getAttribute("id");
-        }
-
-    });
-
-    navItems.forEach(link => {
-
-        link.classList.remove("active");
-
-        if(link.getAttribute("href") === "#" + current){
-            link.classList.add("active");
-        }
-
-    });
-
-});
-
-
-
-const typingText = [
-"Web Developer ",
-"Android Developer "
-];
-
-let i = 0;
-let j = 0;
-let currentText = "";
-let isDeleting = false;
-
-function type(){
-
-currentText = typingText[i];
-
-if(!isDeleting){
-document.querySelector(".typing").textContent = currentText.substring(0,j++);
-}else{
-document.querySelector(".typing").textContent = currentText.substring(0,j--);
+/* Project detail page */
+const root = document.getElementById("detail-root");
+if (root) {
+  const i = P.findIndex(p => p.slug === new URLSearchParams(location.search).get("p"));
+  if (i < 0) {
+    root.innerHTML = `<a class="back" href="index.html#projects">Back to projects</a><h1 style="margin:16px 0">Project not found</h1><p class="lead">That project doesn't exist. <a href="index.html#projects">See all projects</a>.</p>`;
+  } else {
+    const p = P[i], prev = P[(i - 1 + P.length) % P.length], next = P[(i + 1) % P.length];
+    document.title = `${p.title} | Devanshu Panchal`;
+    document.querySelector('meta[name=description]').content = p.tagline;
+    root.innerHTML = `
+      <a class="back" href="index.html#projects">Back to projects</a>
+      <div class="detail-head">
+        <span class="status">${p.status}</span>
+        <h1>${p.title}</h1>
+        <p class="lead">${p.tagline}</p>
+        <div class="cta">${p.links.map(l => `<a class="btn ${l.primary ? "primary" : ""}" href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join("")}</div>
+      </div>
+      <div class="detail">
+        <div>
+          ${p.images ? `<div class="shots">${p.images.map(s => `<img src="${s}" alt="${p.title} screenshot" loading="lazy">`).join("")}</div>` : ""}
+          <section><h2>Overview</h2><p>${p.overview}</p></section>
+          <section><h2>Key features</h2><ul class="plain">${p.features.map(f => `<li>${f}</li>`).join("")}</ul></section>
+          <section><h2>What I learned</h2><p>${p.learned}</p></section>
+        </div>
+        <aside>
+          <div class="box"><h2>Type</h2><p>${typeLabel(p.type)}</p></div>
+          <div class="box"><h2>Tech stack</h2>${chips(p.stack)}</div>
+        </aside>
+      </div>
+      <nav class="pager" aria-label="Other projects">
+        <a href="project.html?p=${prev.slug}"><small>Previous</small><b>${prev.title}</b></a>
+        <a href="project.html?p=${next.slug}" style="text-align:right"><small>Next</small><b>${next.title}</b></a>
+      </nav>`;
+  }
 }
-
-if(!isDeleting && j === currentText.length){
-isDeleting = true;
-setTimeout(type,1000);
-return;
-}
-
-if(isDeleting && j === 0){
-isDeleting = false;
-i = (i+1)%typingText.length;
-}
-
-setTimeout(type,120);
-}
-
-type();
-
-const form = document.getElementById("contact-form");
-const button = document.getElementById("send-btn");
-const status = document.getElementById("form-status");
-
-form.addEventListener("submit", async function(e){
-
-e.preventDefault();
-
-button.innerText = "Sending...";
-button.disabled = true;
-
-let data = new FormData(form);
-
-try{
-
-let response = await fetch(form.action,{
-method: "POST",
-body: data,
-headers:{
-'Accept': 'application/json'
-}
-});
-
-if(response.ok){
-
-status.innerText = "✔ Message Sent Successfully!";
-status.classList.add("success");
-
-form.reset();
-
-button.innerText = "Send Message";
-button.disabled = false;
-
-}else{
-
-status.innerText = "❌ Something went wrong.";
-status.classList.add("error");
-
-button.innerText = "Send Message";
-button.disabled = false;
-
-}
-
-}catch(error){
-
-status.innerText = "❌ Network error. Try again.";
-status.classList.add("error");
-
-button.innerText = "Send Message";
-button.disabled = false;
-
-}
-
-});
-
-window.addEventListener("scroll", function(){
-
-let scrollTop = document.documentElement.scrollTop;
-let scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-
-let progress = (scrollTop / scrollHeight) * 100;
-
-document.querySelector(".scroll-progress").style.width = progress + "%";
-
-});
-
-const scrollBtn = document.getElementById("scrollTopBtn");
-
-window.addEventListener("scroll", function(){
-
-if(document.documentElement.scrollTop > 300){
-scrollBtn.style.display = "block";
-}else{
-scrollBtn.style.display = "none";
-}
-
-});
-
-scrollBtn.addEventListener("click", function(){
-
-window.scrollTo({
-top:0,
-behavior:"smooth"
-});
-
-});
